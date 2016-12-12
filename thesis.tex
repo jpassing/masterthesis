@@ -1,0 +1,440 @@
+\documentclass{wissdoc}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{paralist}
+\usepackage{listings} 
+\usepackage{rotating}
+\usepackage[square, comma, sort&compress]{natbib}
+%\lstset{numbers=left, numberstyle=\tiny, numbersep=5pt} 
+\lstset{language=C}
+%\lstset{xleftmargin=1cm}
+\lstset{
+%fancyvrb=true,
+aboveskip=15pt,
+captionpos=b,
+%basicstyle=\small,
+basicstyle=\ttfamily\footnotesize,
+identifierstyle=\textbf,
+numbers=left,
+numberstyle=\ttfamily\tiny,
+numbersep=10pt,
+numberblanklines=false,
+stepnumber=1,
+tabsize=2,
+postbreak=\space,
+breaklines=true, % Zeilenumbruch
+breakautoindent=true, % Bei Zeilenumbruch einrücken
+frame=lines,
+xleftmargin=0.05\textwidth,
+linewidth=0.95\textwidth
+}
+
+%% Informationen für die PDF-Datei
+\hypersetup{
+ pdfauthor={Johannes Passing},
+ pdftitle={Dynamic Tracing of Windows NT Kernel Mode Components},
+ pdfdisplaydoctitle=true,
+ pdfsubject={NTrace},
+ pdfkeywords={Windows, NT, Tracing, Debugging, WRK},
+ bookmarksnumbered=false
+ }
+ 
+%% Define a new 'leo' style for the package that will use a smaller font.
+\makeatletter
+\def\url@leostyle{%
+  \@ifundefined{selectfont}{\def\UrlFont{\sf}}{\def\UrlFont{\small\ttfamily}}}
+\makeatother
+%% Now actually use the newly defined style.
+\urlstyle{leostyle}
+
+
+\sloppy
+\setcounter{tocdepth}{4}
+
+\renewcommand\floatpagefraction{.9}
+\renewcommand\topfraction{.9}
+\renewcommand\bottomfraction{.9}
+\renewcommand\textfraction{.1}   
+\setcounter{totalnumber}{50}
+\setcounter{topnumber}{50}
+\setcounter{bottomnumber}{50}
+
+\begin{document}
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% page number tweaking
+%% + openany option
+%% - font size 11 (?)
+%% ++++++++++++++++++++++++++++++++++++++++++
+
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% frontmatter
+%% ++++++++++++++++++++++++++++++++++++++++++
+%\frontmatter
+\pagenumbering{roman} 
+
+\include{thesis_titlepage}
+\include{thesis_abstract}
+\include{thesis_acknowledgments}
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% Verzeichnisse
+%% ++++++++++++++++++++++++++++++++++++++++++
+\ifnotdraft{
+\tableofcontents
+\listoffigures
+\listoftables
+\lstlistoflistings
+}
+
+
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% Hauptteil
+%% ++++++++++++++++++++++++++++++++++++++++++
+
+\mainmatter
+\pagenumbering{arabic}
+
+%----------------------------------------------------------------------
+%----------------------------------------------------------------------
+\part{Theoretical Groundwork}
+\label{part:TheoreticalGroundwork}
+\chapter{Introduction}
+
+With growing complexity, software systems have become increasingly hard to understand 
+and debug. Confronted with large volumes of source code, it is challenging for a developer to
+reason about the potential behavior of a system at runtime, much less to diagnose erroneous 
+behavior exhibited by a running system. Having appropriate tools at hand is 
+hence indispensable.
+
+This thesis covers dynamic tracing, a building block for creating tools helping to
+analyze systems by observing their bevavior. Observing a program as it is being executed, 
+and not requiring it to be rebuilt or restarted, dynamic tracing
+is particularly well-suited for long running systems such as operating system kernels. 
+The focus of this thesis therefore lies on the analysis of the Windows NT kernel and its components.
+
+The topic can be further refined as addressing function boundary tracing, i.e. capturing
+function entry and exit events. Software tracing can be performed at an even more fine-grained level,
+yet, function boundary tracing may be expected to yield rather universally applicable results for
+the aforementioned purposes.
+
+
+
+\section{Potential Fields of Applications}
+Given this background, potential and appropriate fields of applications for a dynamic 
+tracing system for the Windows NT kernel can now be laid out more clearly. 
+
+An important potential field of application is production debugging. In production debugging scenarios,
+a dynamic tracing solution promises to allow instrumentation and recording of information without
+interrupting the service of the examined system. Once information has been collected,
+instrumentation can be revoked and the data can be analyzed \emph{offline}. 
+
+Besides the capability of capturing information valuable to pinpoint flaws in a software 
+system, a dynamic function boundary tracing system also promises to help in comprehending a 
+system. Traces, in particular when visualized properly -- for instance, as call graphs --
+can help illuminating the runtime behavior and dynamics of a software system. 
+
+Dynamic tracing can also be used for profiling. In contrast to sampling-based profilers 
+such as \emph{kernrate}\footnote{Part of the Microsoft Windows Server 2003 Resource Kit}, 
+such a profiler could potentially be more accurate as the risk of \emph{missing} a 
+function call due to the sampling interval chosen ceases to exist.
+
+In a similar manner, code coverage -- albeit limited to function level rather than
+basic block level -- could be implemented based on such a dynamic tracing solution.
+
+%\section{Problem Statement}
+%Having sketched out the role of debugging, static and dynamic tracing, it is
+%now possible to refine the problems addressed by this work.
+%
+%The overall aim of this thesis is to assess the feasibility and viablility 
+%of dynamic tracing for kernel mode Windows. This includes
+%
+%\begin{itemize}
+%	\item Analyzing the state of the art of dynamic tracing: A significant
+%				amount of reseach has been performed on the topic of dynamic tracing.
+%				Moreover, a wide range of dynamic tracing approaches have already been developed
+%				in the past. Analyzing strengths and weaknesses of existing approaches and 
+%				discussing their applicability to kernel mode Windows is thus crucial.
+%	\item Defining a set of criteria a prospective tracing solution is to meet.
+%	\item Developing a dynamic tracing approach tailored to kernel mode Windows.
+%	\item Proving feasibility and viablility of this approach by an implementation.
+%	\item Analyzing the implementation for meeting the criteria set up.
+%\end{itemize}
+
+\section{Structure of this Thesis}
+The thesis is structured into three parts. Part 1 covers the theoretical groundwork of the topic.
+This includes an assessment and classification of existing dynamic tracing approaches, along with 
+a discussion of their strengths and weaknesses. The first part concludes with a detailed discussion
+of common implementation challenges related to runtime code modification-based tracing approaches.
+
+Part II introduces NTrace, a dynamic tracing solution developed as part of this thesis. The part opens
+with a general discussion of the tool architecture and continues by laying out the basic approach to function boundary tracing 
+taken. Based on this groundwork, the details of the approach as well as the implementation challenges 
+are discussed.
+
+The thesis concludes with Part III, which provides an analysis of NTrace. This includes a discussion and measurements 
+of the performance characteristics of the implementation.
+
+
+\section{Contributions}
+
+The main contributions of this work are as follows: 
+\begin{itemize}
+	\item Definition of a classification scheme for dynamic tracing techniques.
+	\item Proposal of a dynamic function boundary tracing system for the Windows NT kernel that fully integrates with
+				the Windows Structured Exception Handling infrastructure.
+				
+%	\item Demonstration of that the Microsoft Windows Hotpatching infrastructure can be 
+%			  leveraged for dynamic tracing purposes.
+%	\item Advancement the technique of using return address replacement and 
+%			  auxiliary stack usage for tracing so that it can now effectively be deployed in kernel mode
+%			  Windows.
+%	\item Development of a mechanism for instrumenting the i386 \emph{Structured Exception Handling}
+%				infrastructure.
+	\item Proving the feasibility of the proposed system by an implementation and evaluating its
+				runtime performance.
+\end{itemize}
+
+
+\section{Definition of Terms}
+\label{sec:DefinitionOfTerms}
+The semantic differences between the terms function, procedure, and routine are insignificant 
+in the context of this work and the terms are used interchangeably. Following
+\cite{unix03}, the terms \emph{module} (or \emph{executable module}) and \emph{image} (or \emph{program image})
+are distinguished as follows: A module constitutes a file, usually generated by a linker, containing executable
+code. When the module is loaded into a process, the in-memory representation of the module 
+is referred to as \emph{image}.
+
+For the remainder of this work, code is considered \emph{unmodified} if it matches the code
+that would be executed in the absence of a tracing system.
+
+The terms \emph{trampoline}, \emph{springboard} and \emph{bounce}, all commonly encountered
+in the literature 
+%\cite{Brubacher99} \cite{hollingsworth94dynamic} \cite{Bruening04} \cite{Pearce02} \cite{tamches99finegrained}, 
+\citep{Brubacher99,hollingsworth94dynamic,Bruening04,Pearce02,tamches99finegrained}, 
+will be jointly referred to as \emph{trampoline}.
+
+Any machine that is capable of concurrently executing more than one thread 
+is referred to as multiprocessor machine. This includes true multiprocessor machines as well
+as machines using multicore CPUs or CPUs supporting technologies such as 
+\emph{Simultaneous Multithreading} \cite{Eggers_1simultaneous}.
+
+The terms \emph{i386} or \emph{x86} are avoided in favor of the term \emph{IA-32} 
+\cite{intel07_1} to denote the Intel 32 bit architecture. The \emph{AMD64} \cite{amd64_2}
+and \emph{Intel64} \cite{intel07_1} architectures are jointly referred to as \emph{AMD64}.
+
+All references to Windows refer to the Windows NT family exclusively. Unless stated 
+otherwise, all discussions of Windows NT further refer to Windows Server 2003 SP1/SP2 
+and the Windows Research Kernel 1.2 only. The term \emph{kernel} as used in this work 
+does not include drivers but only refers to the functionality implemented in the 
+kernel module, usually named ntoskrnl.exe. In contrast, \emph{kernel mode Windows}
+refers to the entirety of code running in kernel mode.
+
+Unless stated otherwise, all references to \emph{compiler} and \emph{linker} shall 
+denote the Microsoft compiler \emph{cl} and linker \emph{link}, respectively. 
+As Microsoft compilers and linkers are the prevalent tools for kernel mode Windows 
+development, other compilers are not addressed by this work. 
+
+Occasionally, use of the syntax \verb|module!Function| is made to fully qualify 
+routine names. Finally, all assembler code listings use the Intel syntax. 
+
+\chapter{Criteria}
+\label{sec:Criteria}
+To allow a more effective assessment of existing and potential tracing techniques,
+a set of basic criteria such techniques are to meet shall be defined.
+
+In their paper \emph{Dynamic Program Instrumentation for Scalable Performance Tools},
+Hollingsworth et al. \cite{hollingsworth94dynamic} state that monitoring the performance of 
+massively parallel programs requires an instrumentation system that is \emph{detailed}, 
+\emph{frugal}, and \emph{scalable}.
+
+The focus of this work is not massively parallel systems but rather general 
+purpose systems -- still, these three criteria remain valid and provide a suitable
+foundation. However, to emphasize the fact that monitoring or tracing activity should not endanger
+system stability, \emph{Robustness} shall be introduced as a fourth criterion.
+
+\section*{Detailed}
+In the realm of function boundary tracing, the desired level of detail is
+defined by function calls. A solution capable of tracing function entries
+can be expected to already produce valuable results. Yet, it is desirable to
+have the tracing solution also support function exit tracing, as this additionally allows
+inferring call relationships among functions. 
+
+Whether more fine grained information such as parameter and return values are of
+importance depends on the individual purpose. If the intent of tracing is to
+collect performance information or to comprehend the overall system, such 
+additional information may be not of interest. For problem analysis, in contrast,
+this additional information may be valuable indeed. 
+
+To keep the discussion general in this regard, the aspects of more fine grained 
+information are therefore ignored in the remainder of this work.
+
+\section*{Frugal}
+Frugality -- and performance in particular -- is at the core of a dynamic tracing solution. 
+In fact, the promise of low runtime overhead may have been the reason for 
+a user deciding for a dynamic tracing solution in the first place. More generally, economical
+usage of resources is important for limiting the impact on resource and timing behavior of 
+the traced system, and thus, to ensure applicability of the tracing system.
+
+Rather than striving at high efficiency, frugality can also be attained by limiting the amount
+of data collected. This, however, may stand in conflict with the demand to be detailed. As such,
+this conflict depicts the classical conundrum of having to balance between performance and precision.
+
+Another aspect of frugality is the runtime overhead in case all tracing activity has been 
+disabled. That is, the tracing system is active, yet no tracing information is currently being
+captured. In this case, it is desirable for the tracing solution to impose no or at least 
+no significant runtime overhead.
+
+\section*{Scalable}
+Scalability describes the ability of the tracing system to remain frugal
+and detailed when resources are added. The most important resources in this regard are additional
+functions to be traced, and additional processors.
+
+When tracing information is to be captured for a growing number of functions, the amount
+of data that is to be handled will grow as well. To remain frugal, the system must be able
+to efficiently handle these increased amounts of data.
+
+As multiprocessor machines -- and multicore processors in particular -- become increasingly
+common, the ability to properly deal with more than one processor becomes crucial as well.
+Certainly, this requires the tracing system to be written in a multiprocessor-safe manner.
+However, to remain frugal, this also requires that the tracing system makes effective use
+of the additional processors. In particular, it should not limit the degree in which the 
+tracee makes use of the additional processors and it should not impose significant performance 
+bottlenecks itself.
+
+\section*{Robust}
+When tracing is used in development scenarios, robustness may not be of utmost concern. In
+production debugging scenarios, however, it is crucial that tracing does not endanger
+stability and availability of the traced system. 
+
+Runtime code modification, a technique commonly used for implementing dynamic tracing, 
+is particularly sensitive in this regard. As will be covered in more depth in the remainder
+of this work, significant attention to the details have to be paid in order not to undermine
+the stability of the system. 
+
+%Especially in the realm of Windows, there have been countless attempts of using runtime code 
+%modification -- both by independent developers and commercially \cite{Skywing06} -- that have 
+%failed to properly address these issues. 
+%It therefore does not come at a surprise that in  
+%newsgroups such as \emph{ntdev}, run by Open System Resources, a general aversion towards 
+%such practice can be observed. 
+
+As such, robustness clearly is an important factor to consider when assessing dynamic tracing
+solutions. 
+
+
+%\section*{Windows NT Kernel Specifics}
+%With focus on Windows NT, a number of additional, more specific crtiteria can
+%be identified. 
+%
+%\subsection*{Debugging Symbols}
+%Acting on binary code, dynamic instrumentation solutions usually need appropriate
+%symbolic information in order to allow proper instrumentation. If source code is available
+%for the software to be traced, generating appropriate metadata is feasible. In the case
+%of the Windows kernel and drivers, however, source code must be assumed to be not available.
+%Rather, usage of symbolic information must be restricted to the information Microsoft provides.
+%
+%Indeed, to allow more efficient debugging, Microsoft provides debugging symbol information 
+%for the vast majority of binaries, including kernel and drivers. The point to notice, however,
+%is that this information comprises \emph{public symbols} only -- that is, only a limited set
+%of symbolic information is provided. For a tracing system that aims to be effective for the 
+%Windows kernel, this means that it must be able to cope with the limited amount of 
+%symbolic information available.
+%
+%\subsection*{Exception Handling}
+%With \emph{Structured Exception Handling}, the Windows NT kernel has builtin support 
+%for software exceptions. Although not strictly related to function boundary tracing per se,
+%exceptions can have significant impact on the control flow of a program. As such, it
+%is desireable to have a dynamic tracing solution recognize exceptions and treat them
+%appropriately.
+%
+
+%Motivate Multiproc?
+%
+% - no disasm
+% - uninstrumentability
+% - dynamically loadable, unloadable
+% 
+
+
+%\chapter{Dynamic Tracing}
+%
+%...
+%
+%
+%Performing these steps at runtime and relying on unmodified binaries frees the 
+%user from having to decide between different binaries before launching the
+%program -- a decision that has to be made in the case of static tracing approaches. 
+%Moreover, dynamic tracing solutions usually enable the user to repeatedly alter
+%his decisions about what is to be traced in which level of detail. Being able
+%to refine or modify the tracing activity at runtime in turn promises to allow
+%the user to obtain the insights sought after more quickly than in the case of static tracing.
+%
+%Furthermore, as long as no tracing activity is taking place, most dynamic tracing 
+%solutions can be expected not to induce any runtime overhead. 
+%
+%% disadvantages: less flexible in what is to be traced?
+
+
+%\section{Related Approaches}
+
+%\section{Windows NT Builtins}
+%% ETW
+%\section{Static Instrumentation}
+%\subsection{Manual Source Code Augmentation}
+% LTT, ETW
+% -> olszewski, 2.1
+%\subsection{Compiler Level Augmentation}
+%\subsection{Binary Rewriting}
+
+% ATOM, Purify, EEL, PLTO, Pixie, ETCH
+% -> olszewski, 2.1
+
+% SPIN, Vino, Exokernel
+%-> tamches diss §2.1.1
+
+
+\include{thesis_classification}
+\include{thesis_classanalysis}
+%\include{thesis_existing}
+\include{thesis_codemod}
+\include{thesis_ownapproach}
+
+
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% Anhang
+%% ++++++++++++++++++++++++++++++++++++++++++
+
+\appendix
+
+
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% Literatur
+%% ++++++++++++++++++++++++++++++++++++++++++
+%  mit dem Befehl \nocite werden auch nicht 
+%  zitierte Referenzen abgedruckt
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{\bibname}
+%\nocite{*} 
+\bibliographystyle{alpha}
+\bibliography{bibfile}
+
+%% ++++++++++++++++++++++++++++++++++++++++++
+%% Index
+%% ++++++++++++++++++++++++++++++++++++++++++
+\ifnotdraft{
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Index}
+\printindex            % Index, Stichwortverzeichnis
+}
+\include{thesis_confm}
+\end{document}
+%% end of file
+

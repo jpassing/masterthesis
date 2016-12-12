@@ -1,0 +1,52 @@
+\chapter*{Abstract\markboth{Abstract}{Abstract}}
+Dynamic tracing can be utilized for a variety of purposes, debugging, performance evaluation, 
+and program analysis being amongst them. Although the implementations of respective tracing 
+systems tend to differ sharply, a limited number of tracing \emph{techniques}
+can be identified which all of these solutions base on. Based on this insight, part I of this thesis 
+discusses these tracing techniques in detail and proposes an appropriate classification scheme. This scheme
+promises to allow both current and future tracing solutions to be classified based on their usage
+of these tracing techniques.
+
+In its second part, this thesis discusses NTrace, a dynamic function boundary tracing 
+solution for Windows NT kernel mode components that has been developed as part of 
+this effort. NTrace not only demonstrates how synergies with Microsoft's Hotpatching 
+technology can be utilized in order to achieve safety regarding runtime code modification. 
+It also stands out due to deep integration with the exception handling infrastructure of Windows, 
+\emph{Structured Exception Handling}. With the ability to trace exception unwinds, NTrace is able 
+to yield more precise results than a sheer function entry/exit tracing approach would allow.
+
+By not restricting the usage to customized kernel versions but providing support for retail 
+editions of IA-32 Windows NT, NTrace also promises general applicability. Finally, the performance 
+of NTrace, and the overhead imposed by tracing activity, is discussed in part III, which 
+concludes the thesis.
+
+
+\chapter*{Zusammenfassung\markboth{Zusammenfassung}{Zusammenfassung}}
+Dynamische Ablaufverfolgung kann für eine Vielzahl von Zwecken eingesetzt werden, wie etwa
+zu Performance-Messungen, Programmanalyse oder zur Fehleranalyse auf Produktivsystemen. 
+Obschon die Implementierungen entsprechender Ablaufverfolgungs-Systeme sich bisweilen stark zu 
+unterscheiden neigen, so kann doch eine kleine Menge von \emph{Techniken} 
+identifiziert werden, auf denen diese basieren. Ausgehend von
+dieser Erkenntnis befasst sich Teil I dieser Arbeit mit den Details dieser Techniken und schlägt
+ein Klassifikationsschema für diese vor. Das Schema verspricht, sowohl
+derzeitige als auch künftige Ablaufverfolgungs-Systeme anhand der von ihnen verwendeten Techniken
+einordnen zu können.
+
+Teil II der Arbeit befasst sich mit NTrace, einem Werkzeug zur dynamischen Ablaufverfolgung von 
+Funktionsein- und austritten in Windows NT Kern-Komponenten. Es handelt sich hierbei 
+um eine Neuentwicklung, die im Rahmen dieser Arbeit entstanden ist. NTrace zeichnet sich 
+dabei insbesondere durch zweierlei Aspekte aus: Zum einen wird aufgezeigt, wie Synergien mit der
+Microsoft Hotpatching-Technologie genutzt werden können, um sichere Anwendung von selbstmodifizierendem
+Code zu gewährleisten. Zum anderen umfasst NTrace eine tiefgreifende Integration mit der
+Ausnahmebehandlungs-Infrastruktur des NT Kerns, \emph{Structured Exception Handling}. Diese
+Integration ermöglicht NTrace die Ablaufverfolgung von Ausnahmeabwicklungen, um so präzisere Ergebnisse
+zu erlangen.
+
+NTrace erfordert keinerlei Anpassungen am NT Kern und kann somit auf handelsüblichen Editionen
+des Windows NT IA-32 Kerns genutzt werden, was wiederum vielfältige Anwendungsmöglichkeiten verspricht.
+Eine Betrachtung der Leistung von NTrace und dem mit der Ablaufverfolgung verbundenem Overhead
+ist Teil von Teil III, welcher diese Arbeit abschließt.
+
+
+
+

@@ -1,0 +1,91 @@
+\section{Concluding Remarks}
+%\section{Analysis of Dynamic Instrumentation Techniques}
+The tracing solutions presented as part of the discussion of 
+tracing techniques vary in both their implementation as well as in the individual aims they pursue.
+A general assessment is thus not easily possible. Yet, moving the focus
+to function boundary tracing in the context of the Windows NT kernel and the applicability
+of the techniques in this regard, allows a finer analysis of the strengths and weaknesses 
+of these approaches to be made.
+
+Solutions \emph{modifying the environment} generally require the least effort
+to implement and avoid the challenges associated with code modification. 
+Notwithstanding their lightweightness and robustness,
+the applicability of these approaches is limited. The NT kernel includes 
+several areas of potential applications \cite{Skywing07} where extensive 
+use of function pointers is made, yet the share of functions traceable 
+with this approach is, although hardly quantifiable, rather low. 
+
+In sharp contrast to this, solutions \emph{interposing code execution}
+are extremely versatile and universally applicable. The fact that
+these solutions allow instrumentation on a much finer level than required
+for function boundary tracing should also be considered positive. As
+indicated before, however, the achilles heel of these solutions is
+the bootstrapping. To successfully interpose code execution, the
+tracing facility must either be present from the start of the respective
+program on or it must be injected and be provided some form of jump aid. 
+However, requiring the tracing facility to be present during program startup
+has to be considered a contradiction to the tracing solution being truly \emph{dynamic}. In
+the second case, the tracing solution can only be as good as its jump
+start facility is -- the more limited the number of potential entry points
+is, the more limited will the applicability of such a solution be.
+
+% Perf?
+% entry points?
+
+Solutions relying on \emph{injecting and handling traps} or \emph{editing code} 
+share many properties. They do not reach the versatility
+of interposition solutions but compensate this shortcoming by usually being
+less intrusive and providing a larger number of potential instrumentation/entry points.
+Such solutions are, however, exposed to the challenges of dynamic 
+code modification as discussed in section 
+\ref{sec:ChallengesOfRuntimeCodeModification}. Addressing all of these
+problems is vital for providing a code modifying solution that can be considered safe
+enough for productive use.
+
+The main advantage of avoiding traps and to favor code editing
+techniques is performance. Trap handling introduces a significant
+overhead which has to be paid for each event. The cost
+of issuing and handling breakpoints has been reported to be even 
+higher in case of the operating system running in a hypervisor such as 
+Xen \cite{Hiramatsu07}. 
+
+% trap --> raises irql?!
+
+% hardware?
+
+% freeze_processes on NT? --> multi-instr patching inherently unsafe?
+
+
+% low instrusiveness as criteria --> use against virt/interp.. 
+
+
+
+%\section{Relation to Dynamic Updating Solutions}
+%So far, only tracing techniques and solutions have been discussed. However, certain aspects, 
+%such as the potential necessity to modify code in order to adapt and intercept execution, are shared with another 
+%type of software, namely dynamic updating solutions.
+%
+%The classic way of updating software involves replacing existing modules with new,
+%updated copies and restarting the system. Depending on the individual system, 
+%the shutdown-update-restart cycle can introduce a significant downtime, in particular
+%when the system to be updated is the operating system itself.
+%By providing a means to apply certain software updates to a running system, dynamic
+%updating solutions promise to minimize downtime caused by software updates.
+%
+%A detailed analysis of the similarities and differences between dynamic tracing and 
+%updating techniques is out of scope of this work. However, it is notable that several 
+%updating solutions can be identified to use the technique of \emph{Editing Code}.
+%
+%Ksplice \cite{Ksplice08}, Dynamos \cite{Dynamos07} as well as Microsoft Hotpatching (discussed in 
+%section \ref{sec:MsHotpatching}) are examples for dynamic updating solutions that 
+%rely on code editing techniques to redirect execution flow from old, flawed routines 
+%to corresponding new, updated routines. Although differing in detail, all three solutions 
+%implement this redirection by injecting jumps to trampolines into the original code 
+%and having the trampolines redirect execution to the new routine.
+%
+
+
+% Tracing: no relocation req'd
+% No new code generation
+% preservation of old routine
+

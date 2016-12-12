@@ -1,0 +1,40 @@
+8
+
+dir
+846
+svn://mongoose/Private/MasterThesis/trunk/thesis/lncs
+svn://mongoose
+
+
+
+2008-02-28T15:22:54.562500Z
+667
+jp
+
+
+svn:special svn:externals svn:needs-lock
+
+llncsdoc.sty
+file
+
+
+
+
+2006-07-22T11:07:00.000000Z
+5da0c3958f3b781f62604d9fa26afacb
+2008-02-28T15:22:54.562500Z
+667
+jp
+
+llncs.cls
+file
+
+
+
+
+2006-07-22T11:06:49.000000Z
+133b7fc206c1092cb84cbf62035bba22
+2008-02-28T15:22:54.562500Z
+667
+jp
+

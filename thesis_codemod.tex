@@ -1,0 +1,736 @@
+
+
+\chapter{Challenges Of Runtime Code Modification}
+\label{sec:ChallengesOfRuntimeCodeModification}
+This section discusses various challenges imposed by the CPU and operating
+system on runtime code modification. Unless stated otherwise, the discussion 
+will focus on the Intel IA-32 architecture and applies to Windows NT kernel mode only. 
+
+Adopting the nomenclature suggested by the Intel processor manuals, 
+code writing data to memory with the intent of having the same processor
+execute this data as code is referred to as \emph{self-modifying code} \cite{intel07_3A}. 
+
+On SMP machines, it is possible for one processor to write data to memory 
+with the intent of having a different processor execute this data as code.
+This process if referred to as \emph{cross-modifying code} \cite{intel07_3A}.
+
+For the remainder of this work, the act of executing self-modifying code or
+cross-modifying code is also referred to as \emph{runtime code modification}.
+
+\section{Memory Model}
+\label{sec:MemoryModel}
+In order to implement self-modifying or cross-modifying code, a program must
+be able to address the regions of memory containing the code to be modified. Moreover,
+due to memory protection mechanisms, overwriting code may not be trivially possible.
+
+The IA-32 architecture offers three memory models -- the flat, segmented and
+real mode memory model \cite{intel07_1}. As Windows NT 
+relies on the flat memory model, only the flat memory model is examined in this work.
+
+Whenever the CPU fetches code, it addresses memory relative to the segment mapped by
+the CS segment register. In the flat memory model, the CS segment register, which refers
+to the current code segment, is always set up to map to linear address 0. In the 
+same manner, the data and stack segment registers (DS, SS) are set up to refer to 
+linear address 0.
+
+It is worth mentioning that AMD64 has retired the use of segmentation \cite{amd64_2} 
+and the segment bases for code and data segment are therefore always treated as 0.
+
+Given this setup, code can be accessed and modified on IA-32 as well as on AMD64
+in the same manner as data. 
+
+\section{Memory Protection}
+One of the features enabled by the use of paging on IA-32 systems is the ability 
+to enforce memory protection. Each page can specify restrictions to
+which operations are allowed to be performed on memory of the respective page.
+
+In the context of runtime code modification, memory protection is of special 
+importance as memory containing code usually does not permit write access,
+but rather read and execute access only. A prospective 
+solution thus has to provide a means to either circumvent such write protection 
+or to temporarily grant write access to the required memory areas.
+
+As other parts of the image are write-protected as well, memory protection 
+equally applies to approaches that modify non-code parts of the image such as 
+the Import Address Table.
+
+Some instrumentation techniques rely on code generation. Assuming Data Execution Prevention 
+\cite{DEP} has been enabled, it is vital for such approaches to work properly that any code
+generated is placed into memory regions that grant execute access. While user mode
+implementations can rely on a feature of the RTL heap (i.e. using the
+\verb|HEAP_CREATE_ENABLE_EXECUTE| when calling RtlCreateHeap) for allocating executable memory, 
+no comparable facility for kernel mode exist -- a potential instrumentation solution
+thus has to come up with a custom allocation strategy.
+
+\section{Jump distances}
+\label{sec:JumpDistances}
+A tracing solution may employ dynamic generation of branching instructions in 
+order to splice basic blocks and thus to adapt execution flow. For certain approaches,
+the offset between the branching instruction itself and the jump target may be of 
+significant size. In such cases, the software has to make sure that
+the branch instruction chosen does in fact support offsets at least as large as 
+required for the individual purpose.
+
+The IA-32 instruction set offers a number of branch instructions which, among other
+characteristics, differ in the maximum jump distance they support. As an example, 
+a near jump with immediate operand can address targets with an offset relative 
+to the current instruction pointer that can be expressed by a signed
+32 bit value. Short jumps, in comparison, support only 8 bit offsets. 
+
+However, as those jump instructions that support the largest distances also 
+tend to be the largest in size, it is often advantageous to use a smaller, 
+yet more restricting jump. In case the instrumentation solution 
+is basically rewriting the basic block and its size is allowed to 
+change, it may opt to replace a jump instruction by an instruction 
+supporting a larger displacement. But in case modifications are performed in-place and the 
+size of the basic block is therefore limited, this technique can usually not be applied.
+
+%As this problem is rather common in practice and also applies to jumps from the instrumented
+%code into hook routines, a 
+A common technique to overcome this issue is to make use of
+trampolines \cite{tamches99finegrained}. To support larger jump offsets than the actual
+instruction supports, a stopover is introduced: Execution jumps
+from the origin to a trampoline, which is a snippet of code consisting of
+a single jump instruction only. Taking this jump, execution is then redirected to the
+ultimate target. If the trampoline can be located close to the
+origin, the injected branch instruction only has to support a very short distance.
+
+On Windows NT, Tamches and Miller \cite{tamches99finegrained} suggest overlaying
+initialization code, which can be assumed not to be required any more, yet being close
+to the code locations being instrumented, with trampolines.
+However, this approach fails to take into consideration that such code regions (i.e.
+routines such as \verb|DriverEntry|) are commonly located in paged memory. All accesses
+to these memory regions therefore have to occur at \emph{Interrupt Request Level} (IRQL) 
+below \verb|DISPATCH_LEVEL| in order not to risk a bugcheck. Yet, as the IRQL at which such 
+trampolines might be executed is hard to determine beforehand, adherence to this restriction
+may not be guaranteed. As such, the applicability of this approach has to be expected to be limited.
+
+% trampolines: shade, p25
+
+%\section{Non-Intrusiveness}
+%By modifying code, the execution behaviour of the traced program is influenced. While
+%this influence is intended, it should ideally have no impact on the correctness and
+%the outcome of the execution.
+
+\section{Safety Concerns}
+\label{sec:SafetyConcerns}
+As indicated by the previous section, the act of treating code as data and performing
+modifications on code is straightforward. The question remaining to be solved, however, is the
+safety of such actions, especially in the presence of multiple processors.
+
+Runtime code modification in general can be used for a variety of purposes and a discussion 
+of the overall safety of such actions is out of scope of this work. Therefore,
+this section concentrates on the safety in the specific context of using
+Runtime Code Patching with the intent of allowing routines to be traced.
+
+Given a multiprogramming environment, an algorithm for dynamic instrumentation using 
+runtime code modification shall be considered \emph{safe} in the context of this work if 
+its usage guarantees that at any point in time, a routine is either run unchanged, 
+%is run in an \emph{augmented} state 
+or is run in an \emph{instrumented} state. 
+
+
+
+%Running a routine in an augmented state includes:
+%\begin{itemize}
+%	\item Running an execution path equivalent to the execution path 
+%		that would have been taken in case of running the unmodified routine.
+%	\item Running any necessary thunking code. 
+%\end{itemize}
+
+Running a routine in an instrumented state includes:
+\begin{itemize}
+	\item Calling a pre-hook routine.
+	\item Running an execution path equivalent to the execution path 
+		that would have been taken in case of running the unmodified routine.
+	\item Calling a post-hook routine. (Optional)
+	\item Running any necessary thunking code. 
+\end{itemize}
+
+The execution path of an instrumented routine is considered equivalent to the execution
+path of an unmodified routine if it includes all non-noop instructions of the unmodified
+routine (in the same order) and any additional instructions do not affect the
+outcome of the routine in terms of return value, output-parameters and modified memory.
+Noop instructions shall include the instruction \verb|nop| as well as any other instructions
+that carry out no semantically useful work such as \verb|mov edi, edi|.
+
+The cited criteria should serve as a practical guideline for the evaluation of instrumentation
+approaches in the remainder of this work. Both the discussion of whether these criteria are in fact
+sufficient for a solution to work correctly under all possible circumstances
+and proving whether or not a potential instrumentation algorithm meets these criteria is out of scope
+of this work. Rather, the remainder of this section will discuss common issues in
+the light of these criteria and their individual ramifications. 
+
+The range of potential issues discussed in the following sections is a summary
+of what has been discussed by the publications of existing instrumentation 
+solutions presented in section \ref{sec:Classification} as well as issues experienced with existing
+tools.
+
+Although not aiming to be a complete list of possible issues, an algorithm 
+not being prone to any of these issues while meeting the criteria above should 
+be able to be considered \emph{safe for practical usage}.
+
+It is worth noting that this section does not address any issues not applying
+to the IA-32 architecture but that may still be relevant on other architectures such as
+issues regarding out of order instructions, delay slots or non-transparent instruction caches.
+
+\subsection{Cross-Modifying Code and Atomicity}
+\label{sec:Atomicity}
+Performing modifications on existing code is a technique commonly encountered among
+instrumentation solutions. Assuming a multiprocessor machine, altering code
+brings up the challenge of properly synchronizing such activity among processors.
+
+As stated in section \ref{sec:MemoryModel}, code can be modified in the same manner as data. Whether
+modifying data is an atomic operation or not, depends on the size of the operand. If the total number of 
+bytes to be modified is less than 8 and the target address adheres to certain alignment requirements, 
+current IA-32 processors guarantee atomicity of the write operation \cite{intel07_3A}.
+
+If any of these requirements do not hold, multiple write instructions have to be performed, which
+is an inherently non-atomic process.
+It is, however, crucial to notice that even in situations where using atomic writes 
+or bus locking on IA-32 or AMD64 would be feasible, such practice would not necessarily be safe as 
+instruction fetches are allowed to pass locked instructions \cite{intel07_3A}.
+
+Although appealing, merely relying on the atomicity of store operations must therefore 
+in many cases be assumed to be insufficient for ensuring safe operation.
+
+The exact behavior in case of runtime code modifications slightly varies among
+different CPU models. On the one hand, guarantees concerning safety of such practices have been
+lessened over the evolvement from the Intel 486 series to the current Core 2 series \cite{intel07_3A}. 
+On the other hand, certain steppings of CPU models exhibit defective behavior in this regard \cite{intel02_Err}. 
+
+Due to this variance, the exact range of issues that can arise when performing code modifications
+is not clear and appropriate countermeasures cannot be easily identified. As described in several
+errata, \cite{intel02_Err}, cross-modifying code not adhering to certain coding practices described later, can
+lead to \emph{unexpected execution behavior}, which may include the generation of exceptions. 
+
+The route chosen by the Intel documentation is thus to specify an algorithm that is guaranteed
+to work across all processor models -- although for some processors, it might be more restricting than
+necessary \cite{intel07_3A}. 
+
+For cross-modifying code, the suggested algorithm makes use of \emph{serializing instructions}.
+The role of these instructions, \verb|cpuid| being one of them, is to force any modifications
+to registers, memory and flags to be completed and to drain all buffered writes to memory 
+before the next instruction is fetched and executed \cite{intel07_3A}. 
+
+Quoting the algorithm defined by Intel in \cite{intel07_3A}:
+\begin{quote}
+\begin{verbatim}
+(* Action of Modifying Processor *)
+Memory_Flag <- 0; (* Set Memory_Flag to value other than 1 *)	
+Store modified code (as data) into code segment;	
+Memory_Flag <- 1;	
+
+(* Action of Executing Processor *)	
+WHILE (Memory_Flag != 1)	
+  Wait for code to update;	
+ELIHW;
+	
+Execute serializing instruction;	
+Begin executing modified code;	
+\end{verbatim}
+\end{quote}
+
+% performance/cost
+
+To further complicate matters, the IA-32 architecture uses a variable-length instruction set. 
+As a consequence of that, additional problems not yet addressed may occur if the instruction lengths of unmodified 
+and new instruction do not match. Two situations may occur
+\begin{itemize} 
+	\item The new instruction is longer than the old instruction. In this case, more than one
+			  instruction has to be modified. Modifications straddling instruction boundaries, however,
+			  are exposed to an extended set of issues discussed in section \ref{sec:PreemptionAndInterruption}.
+	\item The new instruction is shorter than the old instruction. The ramifications of this situation
+			  depend on the nature of the new instruction. If, for instance, the instruction is an
+			  unconditional branch instruction, the subsequent pad bytes will never be executed and can be neglected. If, 
+			  on the other hand, execution may be resumed at the instruction following the new instruction,
+			  the pad bytes must constitute valid instructions. For this purpose, a \emph{sled} consisting of
+			  \verb|nop| instructions can be used to fill the pad bytes.
+			  
+			  The algorithm defined by Intel for cross-modifying code ensures that 
+			  neither the old nor the new instruction is 
+			  currently being executed while the modification is still in progress. Therefore, when employing
+			  this algorithm, replacing a single instruction by more than one instruction can 
+			  be considered to be equally safe to replacing an instruction by an equally-sized instruction.
+\end{itemize}			  
+
+It is worthwhile to notice that regardless which situation applies for instrumentation, the
+complementary situation will apply to uninstrumentation.
+			  
+\subsection{Concurrent Execution}
+\label{sec:ConcurrentExecution}
+A typical user mode process on a Windows system can be expected to have more than 
+one thread. In addition to user threads, the Windows kernel employs a number of 
+system threads. Given the presence of multiple threads, it is likely that whenever 
+a code modification is performed, more than one thread is affected, 
+i.e. more than one thread is sooner or later going to execute the modified
+code sequence. 
+
+The basic requirement that has to be met is that even 
+in the presence of a preemptive, multi threaded, multiprocessing environment,
+an instrumentation solution has to ensure that any other thread either does not run 
+the affected code at all, runs code not yet reflecting the respective modifications 
+or runs code reflecting the entire set of respective modifications. 
+
+On a multiprocessor system, threads are subject to concurrent execution. While one thread
+is currently performing code modifications, another thread, running on a different
+processor, may concurrently execute the affected code.
+
+If only a single instruction is to be modified and the cited algorithm for cross-modifying
+code is used, concurrent execution, preemption and interruption should not be 
+of concern. Any other thread will either execute the old or new instruction, 
+but never a mixture of both.
+
+However, the situation is different when more than one instruction is to be modified. In 
+this case, a different thread may execute partially modified code.
+
+Although code analysis may indicate certain threads
+not to ever call the routine comprising the affected code, signals or \emph{Asynchronous Procedure Calls} (APCs) executed on
+this thread may. Therefore, a separation in affected and non-affected threads may not
+always be possible and it is safe to assume that all threads are potentially affected.
+
+\subsection{Preemption and Interruption}
+\label{sec:PreemptionAndInterruption}
+Both on a multiprocessor and a uniprocessor system, all threads running in user mode as 
+well as threads running in kernel mode at IRQL APC\_LEVEL or below are subject to 
+preemption. Similarly, for a thread running at DISPATCH\_LEVEL or \emph{Device IRQL} (DIRQL), it is also possible 
+to be interrupted by a device interrupt \cite{WindowsInternals}. As these situations are similar, only the case
+of preemption is discussed.
+
+If only a single instruction is to be modified, preemption and interruption may not
+be problematic. If, however, multiple instructions are to be adapted, the ramifications 
+of preemption in this context are twofold. On the one hand, the code performing the 
+modification may be preempted while being in the midst of a multi-step runtime code 
+modification operation:
+
+\begin{itemize}
+	\item Thread A performs a runtime code modification. Before the last instruction
+		has been fully modified, the thread is preempted. The instruction stream is now in
+		a partially-modified state.
+	\item Thread B begins executing the code that has been modified by Thread A.
+		In case instruction boundaries of old and new code match, the instruction sequence
+		that is now run by Thread B should consist of valid instructions only, yet 
+		the mixture of old and new code	may define unintended behavior. If instruction 
+		lengths do not match, the situation is worse. After Thread B has executed the 
+		last fully-modified instruction, the CPU will encounter a partially-overwritten
+		instruction. Not being aware of this shift of instruction boundaries, the CPU 
+		will interpret the following bytes as instruction stream, which may or may not consist
+		of valid instructions. As the code now executed has never been intended to be executed,
+		the behavior of Thread B may now be considered arbitrary.
+\end{itemize}
+
+%It is worth emphasizing that this situation can occur regardless of whether the underlying
+%hardware architecture allows the multiple-instruction modification to be conduced atomically
+%or not.
+
+In order to avoid such a situation from occurring, an implementation can disable preemption
+and interruption by raising the IRQL above DIRQL during the modification
+process. 
+
+On the other hand, the code performing the code modification may run uninterrupted, yet one
+of the preempted threads might become affected:
+
+\begin{itemize}
+	\item Thread A has begun executing code being part of the instruction sequence that is about
+		to be modified. Before having completed executing the last instruction of this sequence,
+		it is preempted.
+	\item Thread B is scheduled for execution and performs the runtime code modification. Not 
+		before all instructions have been fully modified, it is preempted.
+	\item Thread A is resumed. Two situations may now occur -- either the memory pointed
+		to by the program counter still defines the start of a new instruction or -- due to
+		instruction boundaries having moved -- it points into the middle of an instruction. In
+		the first case, a mixture of old and new code is executed. In the latter case, the memory
+		is reinterpreted as instruction stream. In both cases, the thread is likely to 
+		exhibit unintended behavior.
+\end{itemize}
+
+One approach of handling such situations is to prevent them from occurring by adapting
+the scheduling subsystem of the kernel. However, supporting kernel preemption is a key 
+characteristic of the Windows NT scheduler -- removing the ability to preempt kernel 
+threads thus hardly seems like an auspicious approach. Regarding the Linux kernel, 
+however, it is worth noting that kernel preemption 
+is in fact an optional feature supported on more recent versions (2.6.x) only \cite{linux05}. As
+a consequence, for older versions or kernels not using this option, the situation as described
+in the previous paragraph cannot occur. GILK \cite{Pearce00}, which has been mentioned before
+for being an instrumentation tool relying on being able to replace multiple instructions in
+fact relies on a kernel not supporting kernel preemption.
+
+A more lightweight approach to this problem relies on analysis of concurrently running
+as well as preempted threads. That is, the program counters of all threads are 
+inspected for pointing to regions that are about to be affected by the code modification. 
+If this is the case, the code modification is deemed unsafe and is aborted. Needless
+to say, it is crucial that all threads are either preempted or paused during this analysis 
+as well as during the code modification itself. As the thread performing the checks and
+modifications is excluded from being paused and analyzed, it has to be assured that this
+thread itself is not in danger of interfering with the code modification.
+
+In a similar manner, the return addresses of the stack frames of each
+stack can be inspected for pointing to such code regions. Stack walking, however, is exposed
+to a separate set of issues that are discussed in section \ref{sec:StackWalking}.
+
+Rather than aborting the operation in case one of the threads is found to be negatively affected by
+the pending code modification, a related approach is to attempt to fix the situation. That is,
+the program counters of the affected threads are updated so that they can resume properly.
+
+One example for a user-mode solution implementing this approach is 
+Detours \cite{Brubacher99}. Before conducting any code modification,
+Detours suspends all threads a user has specified as being potentially affected
+by this operation. After having completed all code modifications,
+all suspended threads are inspected and their program counters are adapted if necessary.
+Not before this step has completed, the threads are resumed. 
+
+%However, it is crucial to notice that not only the top stack frame but also any
+%other stack frame might become affected by a runtime code modification. Whenever
+%the code pointed to by a return address of one of the stack frame is modified,
+%the same issues can occur.
+
+%However, Detours
+%erroneously assumes that only the current program counter of a thread, but never 
+%a return address of one of the thread's stack frames could possibly point to 
+%the code under modification. 
+
+ % Fibers --> unknown preemtions!
+	  
+ % multi-instr-patch: move ip if code is sideeffect-free
+
+
+\subsection{Basic Block Boundaries}
+\label{sec:BasicBlockBoundaries}
+Another issue of multiple instruction modification is related to program flow. 
+Whenever a sequence of instructions that is to be altered spans multiple 
+basic blocks \cite{Aho88}, it is possible that not only the first instruction of the sequence,
+but also one of the subsequent instructions may be a branch target.
+When instruction boundaries are not preserved by the code modification step,
+the branch target might fall into in the midst of one of the new instructions.
+Again, such a situation is likely to lead to unintended program behavior 
+\cite{tamches99finegrained}.
+
+Identifying basic blocks and thus any potential branch targets requires flow
+analysis. However, especially in the case of optimized builds, it is insufficient
+to perform an analysis of the affected routine only as blocks might be shared
+among more than one routine. In such cases, a routine does not consist of a contiguous
+region of code but may be scattered throughout the image. Therefore, it is crucial
+to perform flow analysis on the entire image. But even in this case, the existence of 
+indirect branches may render a complete analysis impossible in practice. 
+
+The idea of creating a control flow graph in order to avoid overwriting a 
+basic block boundary has been implemented by several solutions, including
+GILK \cite{Pearce00} and KernInst \cite{Tamches01}, which analyzes the entire kernel image. 
+In a similar manner, djprobe \cite{Hiramatsu07} 
+performs static code analysis to detect such issues. Both 
+instrumentation tools rely on overwriting multiple instructions and are
+therefore exposed to this issue.
+
+Another situation where an instrumentation solution may run into the danger of 
+overwriting basic block boundaries is the instrumentation of very short routines. 
+If the routine is shorter (in terms of instruction bytes occupied) than the
+instructions that need to be injected in order to instrument the routine, 
+the first basic block(s) of the subsequent routine may be overwritten.
+
+
+\subsection{Stack Walking}
+\label{sec:StackWalking}
+As indicated before, walking the stacks of all threads is a technique that can
+be employed to check whether certain code modification operations can be expected
+to be safe or not. However, for such checks to be reliable, it has to be assured 
+that the stack traces are proper, i.e. that no frames are missed.
+
+If correct debugging symbol information is available for all modules involved in a 
+stack walk, a stack trace can be expected to be reliable. In practice, however, 
+debugging information is often not available, so that symbol-less approaches 
+have to be taken.
+
+While reliably obtaining proper stack traces without using debugging symbols may in fact 
+be viable on certain architectures and platforms, including Windows NT/AMD64 with its unified calling 
+convention, it turns out to be rather problematic on the IA-32 platform. To walk the
+stack without debugging symbols, the frame pointer chain can be attempted to be 
+traversed. This approach, however, is thwarted as soon as one
+of the modules involved makes use of certain compiler optimizations such as 
+\emph{frame pointer omission}. As a consequence, this technique can usually
+not be expected to yield reliable results.
+
+The dynamic updating solutions Ksplice \cite{Ksplice08} 
+and Dynamos therefore implement a more conservative, debugging symbol-less approach of
+walking the stack: Starting from the top of the stack, each double word
+(on IA-32) is inspected until the base address of the stack has been reached. 
+Whenever a double word contains a value that, interpreted as a pointer, refers
+to a region in memory occupied by code, this address is assumed to be
+a return address of a stack frame. Although this 
+assumption may be faulty and is likely to lead to false positives, 
+this technique gives these solutions the ability to perform certain 
+checks on the routines these addresses point to. 
+
+Although the latter approach seems auspicious, there is another inherent
+problem related to the overall approach of analyzing the stacks of all threads.
+For such analysis to be reliable, it is of utmost importance to analyze \emph{all}
+stacks. In particular, this includes the stacks of all preempted threads. In the normal case,
+enumerating this list is possible by walking the list of threads maintained by
+the kernel. In user mode Windows NT, such enumeration can be done using the 
+\emph{Toolhelp API}, in kernel mode, the list of KTHREAD structures can be
+traversed.
+
+However, this approach neglects the fact that in addition to each kernel-allocated
+thread being associated a stack, there may be additional, custom allocated stacks.
+\emph{Fibers}, for instance, as offered by Windows NT in user mode, offer such a facility. Each fiber 
+maintains a separate stack. Yet, as there is no 1:1 mapping between these stacks and
+kernel-allocated stacks, it is not possible to enumerate and identify such user-allocated 
+stacks by using the thread-enumeration facilities discussed above. In fact, locating 
+user-allocated stacks must be expected to not be possible without the individual 
+program cooperating. 
+
+In NT kernel mode, the practice of maintaining user-allocated stacks may not be very
+common. Moreover, it is explicitly discouraged by Microsoft \cite{Microsoft07}. 
+Still, the possibility of drivers using such techniques cannot be ruled out.
+
+Regarding stack walking, custom allocated stacks pose a serious concern.
+As they are equally subject to preemption-related issues as kernel-allocated
+stacks are, it is crucial for such stacks to be analyzed as well. 
+
+
+\subsection{Life Cycle Management of Dynamically Allocated Code}
+\label{sec:LifecycleManagement}
+A common technique encountered among dynamic instrumentation solutions is using
+\emph{trampolines}, i.e. little chunks of dynamically generated code
+that is mostly specific to a single instrumentation point. Such code blocks, but also
+other code that has been dynamically loaded, is subject to proper life cycle management.
+
+As soon as an instrumentation point is revoked and the affected routine is reverted to
+its original state, code blocks specific to this instrumentation point are not needed 
+any more. However, due to the existence of concurrently running as well as preempted threads, it 
+is not trivial to judge whether unloading and freeing the affected memory is indeed a safe operation. For
+concurrency, another CPU may currently be running the code regions in question. Even
+more likely is the case that one of the preempted threads is referring to instructions
+of the affected code chunk. Depending on the individual algorithm and the question whether
+or not the code block may contain call instructions, the program counter 
+of the preempted thread as well as the return addresses of any of the thread's stack frames
+may still point to the code block in question. Unloading and freeing the trampoline 
+would in this case inevitably lead to faults or otherwise unintended 
+program behavior. 
+
+Detours \cite{Brubacher99} attempts to avoid such situations by analyzing the state of other threads. After
+suspending all affected threads -- the distinction between affected and 
+non-affected threads has to be made by the user of the library -- Detours checks whether
+any thread refers to the trampoline that is to be freed. If this is the case, the
+instruction pointer of this thread is modified to point to the original code again, which 
+will have been restored before the suspended threads are resumed.
+
+However, by inspecting the current instruction pointer (i.e. the top stack frame) of the threads 
+only, Detours fails to consider the possibility of lower stack frames being 
+affected: Under certain circumstances, it is possible that Detours will relocate 
+a call instruction into the trampoline. In this case, the following situation may occur:
+\begin{itemize}
+	\item Thread A enters the trampoline, executes the call and enters the called routine.
+	\item Thread B removes the detour. This includes freeing the respective trampoline.
+	\item Thread A returns from the called routine and will attempt to continue execution
+				in the trampoline. As the trampoline has already been freed, an access violation
+				or undefined behavior will occur.
+\end{itemize}
+
+\emph{MDL} \cite{hollingsworth97mdl}, part of the Paradyn tools, therefore analyzes 
+all stack frames before freeing a trampoline. In case an affected stack frame has been
+identified, the free operation is delayed and retried later. This analysis is 
+significantly more thorough and avoids situations such as the one Detours suffers from.
+Yet, the viability of this approach depends on whether it is possible to always 
+perform a proper stack walk of the affected threads -- a topic that has been
+discussed in section \ref{sec:StackWalking}.
+
+KernInst \cite{tamches99finegrained}, which makes extensive use of dynamically allocated code blocks for trampolines
+and code patches, attempts to avoid lifecycle problems from occurring by delaying free operations. 
+Solaris, like Windows NT, both supports SMP and kernel thread preemption. Short of 
+being able to identify whether a preempted thread or concurrently running thread is still referring
+to the affected code, KernInst does not immediately free the memory when the instrumentation
+is revoked. Rather, it waits three seconds, during which it expects all affected threads
+to have left the critical region before finally freeing the memory. This expectation is backed
+by the fact that all operations performed within trampolines are non-blocking.
+Yet, this strategy is only able to minimize rather than to eliminate the likeliness
+of freeing code blocks that are still in use.
+
+Attempts to solve this issue by using reference counting, as suggested by 
+\cite{Tamches01}, are exposed to a hen-egg problem: When entering a dynamically
+allocated code block, a counter-incrementing instruction is executed, signaling
+that the block is in use. Before leaving the block, the counter is decremented. As soon
+as the associated instrumentation has been revoked and the counter drops to zero, the block may be 
+freed. The problem of this approach lies in the fact that decrementing the counter and 
+taking the jump to leave the block cannot be performed in a single, atomic operation. 
+The affected thread may successfully have decremented the counter to zero, 
+but is preempted before having been able to take the jump to leave the block. 
+Referring to the reference counter, the block is now in a state that allows
+it to be freed -- yet, a thread is still referring to it. Again, additionally delaying the free 
+operation can help minimizing, but is unable to eliminate this risk.
+
+In a similar manner, dynamically allocated code shared among several or all 
+instrumentation points is affected by this discussion. For instance, when the instrumentation
+solution has been developed as a loadable driver, it may not always be easily possible to 
+determine whether unloading this driver would be a safe operation. Although any
+instrumentation may have long been revoked, some preempted (possibly starved) thread may still 
+be referring to a routine located within the driver that has been called by 
+instrumentation code.
+
+% driver unloadability?
+
+
+
+\subsection{Disassembly}
+\label{sec:Disassembly}
+Certain instrumentation algorithms require partial or even complete disassembly of 
+the routine to be instrumented. However, the relative complexity of the IA-32 instruction set,
+the fact that instructions are of variable length and the problem that code and 
+data can often not be clearly separated from each other makes decoding IA-32 machine 
+code nontrivial. Moreover, the existence of indirect jumps can thwart attempts
+to perform thorough static analysis on the code. 
+
+Faced with certain problematic code and data sequences, both of the two predominant
+disassembly algorithms, \emph{linear sweep} and \emph{recursive traversal} can run into
+situations where they silently begin to produce wrong results. Although the results
+have been shown to be improvable by hybrid approaches, the general problem remains
+in existence \cite{schwarz02disassembly}. 
+
+Regarding compiler-generated code, such problematic code sequences rarely occur. Rather,
+such code is often a sign of deliberate code obfuscation \cite{Eilam05}. Still,
+in the context of reengineering-sensitive software, which not only malware but also
+systems like \emph{Digital Rights Management} (DRM) solutions belong to, such code 
+obfuscation is quite popular and should not be neglected in practice.
+
+The nature of a dynamic tracing solution implies that it must be capable
+of dealing with unknown code, i.e. code that has never been instrumented before with
+the given solution. In order to properly cope with such code, an instrumentation 
+solution relying on disassembly and static analysis should therefore put 
+emphasis on the quality of disassembly as it may directly influence the stability 
+of the system. 
+
+% Definition? Following at least one branch?
+
+% assumption: unknowm code --> possibly even malware, obfusc
+% fixed len vs. var-len ISA
+% --> anti reversing tricks
+% linear sweep vs. recursive traversal etc.
+
+\subsection{Parameter Validation}
+Although not strictly related to the practice of instrumentation, an important factor
+of the safety of instrumentation is proper usage and validation of parameters. Whenever
+an instrumentation solution has intercepted a routine call and wishes to access any
+of the parameters passed to the routine, it must be capable of dealing with invalid
+parameters. The situation where proper parameter validation is especially crucial
+for system stability is when any of the parameters contain values specified by a user
+mode program. As this is the case for all system service routines, intercepting these
+routines and using the parameters passed requires special care. Practices such
+as using a pointer without proper validation or dereferencing an object handle without
+type checking can undermine the security and stability of the operating system 
+\cite{Skywing06}.
+
+\subsection{Other Events}
+Further events an instrumentation solution may not have control over may influence 
+proper completion of a runtime code modification. An example of such an event are
+DMA operations. A device -- without the instrumentation software being aware of --
+might start a data transfer affecting the memory location that is currently affected
+by a code modification. Due to concurrent accesses, the result of such an operation may
+thus become undefined.
+
+		
+%	\item Software/Process External Events:
+%		Events the affected process does not have direct influence on. Process external events 
+%		that may influence atomicity include actions such as remote
+%		creation of a thread that may in turn call the affected routine. If the affected memory
+%		region is part of a section shared with at least one other process, it is also possible
+%		that another process may read from or write to the affected region. This process may
+%		read an inconsistent instruction stream or -- in case of writing -- hamper the code
+%		modification. It is worth noting that although Windows NT shares the pages of
+%		images among different processes, this sharing is performed with Copy-on-Write semantics.
+%		As a consequence, this situation can only arise when a process has explicitly created
+%		a section and has copied or generated code into the shared memory area. But even without
+%		sections, a different process (assuming appropriate security rights) can use remote VM operations 
+%		(ZwReadVirtualMemory, ZwWriteVirtualMemory \cite{Nebbett00}) to access the affected memory and
+%		hamper the code modification.
+%		
+%		In a similar fashion it is possible that the kernel makes user mode callbacks, that
+%		may directly or indirectly lead to the affected affected routine being called. By default,
+%		only a small number of system-provided routines is affected by such callbacks (such as
+%		KiUserExceptionDispatcher \cite{Nebbett00}). Although unlikely in practice, the presence of third-party 
+%		drivers may entail the possibility of other user mode routines to be called from
+%		the kernel.
+%		
+%		The exampled provided are non-exhaustive.
+
+%	\item Hardware Induced Events (excluding interrupts):
+
+\section{Sharing of Resources}
+The vast majority of tracing solutions can be expected to run parts or even most
+of their code in the same virtual address space as the tracee. This holds true for
+code editing-based systems but may certainly also apply to other instrumentation 
+solutions which utilize different tracing techniques.
+
+As such, the tracing
+code and the traced code share a number of resources, including memory, registers,
+condition flags, and handles. 
+
+While the tracing code is aware of potential conflicts that may arise from this sharing, the traced code is not.
+As such, it is crucial to share these resources in a manner that avoids conflicts and
+impacts the traced code to the least amount.
+
+Cmelik \cite{cmelik94shade} defines the following four ways to deal with such sharing
+of resources:
+\begin{itemize}
+	\item	Partition the resource. Part of the resource belongs to one contender, and
+				part to another. This, for example, is applicable to heap/pool memory.
+	\item Time multiplex the resource. Part of the time the resource belongs to one contender
+				and part of the time it belongs to another. Additional processing time and storage 
+				are required for swapping. Use cases for this approach include sharing registers 
+				between the contenders.
+	\item Simulate (virtualize) the resource to the tracee.
+	\item Unprotected sharing -- changes made by either effect both. This is generally to be 
+				avoided. 
+\end{itemize}
+ 
+There are ample resources whose sharing between the traced and tracing party may lead to problems.
+However, of special interest are those resources that are modified as part of the instrumentation 
+process. Depending on the tracing technique, this may be code, function pointers, or other resources.
+Such modifications are conducted to influence the execution of the tracee. Yet, running 
+in the same address space, any of such modifications may also directly or indirectly
+influence the tracing code, which is generally undesired. 
+
+One of the most prominent issue in this regard is reentrance. For example, a routine like 
+\verb|malloc| may have been instrumented and is currently traced. Yet, for tracing to work, 
+a memory allocation may have to be performed on behalf of the tracing code. However, calling 
+\verb|malloc| in this situation will invoke the tracing code again, which in turn will lead
+to endless recursion.
+
+But even if such recursion is avoided, reentrance may become a problem. The implementation
+of \verb|malloc| in the previous example may not be reentrant or -- worse yet -- may 
+deadlock in case of reentrant calls. Again, the situation depicted may well lead to
+a crash or a hang.
+
+Code modification, even if conducted safely, may lead to undesired, resource sharing-related 
+effects as well: For example, the instrumentation process may involve injecting \verb|int 3| 
+instructions into the the code, with the intent of handling the traps appropriately. However, 
+if the instrumented program is being debugged, this practice may well interfere with the debugger's
+notion of breakpoints, which may also rely on \verb|int 3| instructions being injected. Clearly,
+such effects would be a result of the interrupt being shared among both parties without
+an ordered sharing strategy.
+
+Properly dealing with shared resources and potential effects such as reentrance is therefore of utmost
+importance for the proper working of a tracing solution. 
+
+
+
+\section{Evaluation of Safety Concerns}
+Having discussed prevalent challenges of runtime code modification certain conclusions may
+be drawn. An important observation is that due to the inherent complexities and challenges
+coming along with replacing multiple instructions, an approach that only requires replacing
+a single instruction of non-quiescent code is clearly favorable.
+
+Moreover, not all issues are equally critical. Some events such as concurring DMA operations
+on memory containing the code to be modified are unlikely and uncommon enough to be neglected
+in practice.
+
+	  %UM: threads in same address space + processes sharing pages
+	  %COW
+	  %KM: all threads
+	  %WriteProcMem? kernel grabbing into user space
+	  %DMA?
+	  
+	  
+	  
+
+
+
+

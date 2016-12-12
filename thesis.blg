@@ -1,0 +1,28 @@
+This is BibTeX, Version 0.99cThe top-level auxiliary file: D:\uni\master\thesis\thesis.aux
+A level-1 auxiliary file: thesis_titlepage.aux
+A level-1 auxiliary file: thesis_abstract.aux
+A level-1 auxiliary file: thesis_acknowledgments.aux
+A level-1 auxiliary file: thesis_classification.aux
+A level-1 auxiliary file: thesis_classanalysis.aux
+A level-1 auxiliary file: thesis_codemod.aux
+A level-1 auxiliary file: thesis_ownapproach.aux
+The style file: alpha.bst
+A level-1 auxiliary file: thesis_confm.aux
+Database file #1: bibfile.bib
+Warning--to sort, need author or key in ValgrindTools
+Name 1 in "Alfred V. Aho, Ravi Sethi, and Jeffrey D. Ullman" has a comma at the end for entry Aho88
+while executing---line 1185 of file alpha.bst
+Name 1 in "Alfred V. Aho, Ravi Sethi, and Jeffrey D. Ullman" has a comma at the end for entry Aho88
+while executing---line 1185 of file alpha.bst
+Name 1 in "Alexander Schmidt, and Michael Schöbel" has a comma at the end for entry Schmidt08
+while executing---line 1185 of file alpha.bst
+Name 1 in "Alexander Schmidt, and Michael Schöbel" has a comma at the end for entry Schmidt08
+while executing---line 1185 of file alpha.bst
+Warning--empty journal in Ksplice08
+Name 1 in "Alfred V. Aho, Ravi Sethi, and Jeffrey D. Ullman" has a comma at the end for entry Aho88
+while executing---line 1250 of file alpha.bst
+Warning--empty institution in hollingsworth94dynamic
+Warning--empty institution in Vulcan01
+Name 1 in "Alexander Schmidt, and Michael Schöbel" has a comma at the end for entry Schmidt08
+while executing---line 1250 of file alpha.bst
+(There were 6 error messages)
